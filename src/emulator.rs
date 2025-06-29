@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::nibbles::Nibbles;
+use crate::opcode::Opcode;
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 // CHIP8 screen size is 64*32 pixels
@@ -92,7 +92,7 @@ impl Emulator {
 
     /// Execute the instruction and do what it tells you
     pub fn execute(&mut self) {
-        let decoded_operation: Nibbles = self.decode();
+        let decoded_operation: Opcode = self.decode();
 
         match decoded_operation.category {
             0x0 => match decoded_operation.nnn {
@@ -102,8 +102,18 @@ impl Emulator {
             },
             0x1 => self.jump(decoded_operation.nnn),
             0x2 => self.subroutine_call(decoded_operation.nnn),
+            0x3 => self.skip_if_equal(decoded_operation.x, decoded_operation.nn),
+            0x4 => self.skip_if_not_equal(decoded_operation.x, decoded_operation.nn),
+            0x5 => match decoded_operation.n {
+                0x0 => self.skip_if_regs_equal(decoded_operation.x, decoded_operation.y),
+                _ => {}
+            },
             0x6 => self.set_register(decoded_operation.x, decoded_operation.nn),
             0x7 => self.add_to_register(decoded_operation.x, decoded_operation.nn),
+            0x9 => match decoded_operation.n {
+                0x0 => self.skip_if_regs_not_equal(decoded_operation.x, decoded_operation.y),
+                _ => {}
+            },
             0xA => self.set_index_register(decoded_operation.nnn),
             0xD => self.display(
                 decoded_operation.x,
@@ -115,9 +125,9 @@ impl Emulator {
     }
 
     /// Decode the instruction to find out what the emulator should do
-    fn decode(&mut self) -> Nibbles {
+    fn decode(&mut self) -> Opcode {
         let instruction: u16 = self.fetch();
-        Nibbles::new(instruction)
+        Opcode::decode(instruction)
     }
 
     /// Fetch the instruction from memory at the current PC (program counter)
@@ -208,5 +218,37 @@ impl Emulator {
             }
         }
         self.redraw_required = true;
+    }
+
+    /// Check if the value in `reg_num` is equal to `value` and increments PC by 2
+    /// if that's the case
+    fn skip_if_equal(&mut self, reg_num: u8, value: u8) {
+        if self.variable_registers[reg_num as usize] == value {
+            self.pc += 2;
+        }
+    }
+
+    /// Check if the value in `reg_num` is not equal to `value` and increments PC by 2
+    /// if that's the case
+    fn skip_if_not_equal(&mut self, reg_num: u8, value: u8) {
+        if self.variable_registers[reg_num as usize] != value {
+            self.pc += 2;
+        }
+    }
+
+    /// Check if the value in `x_reg` is equal to the value in `y_reg` and
+    /// increments PC by 2 if that's the case
+    fn skip_if_regs_equal(&mut self, x_reg: u8, y_reg: u8) {
+        if self.variable_registers[x_reg as usize] == self.variable_registers[y_reg as usize] {
+            self.pc += 2;
+        }
+    }
+
+    /// Check if the value in `x_reg` is not equal to the value in `y_reg` and
+    /// increments PC by 2 if that's the case
+    fn skip_if_regs_not_equal(&mut self, x_reg: u8, y_reg: u8) {
+        if self.variable_registers[x_reg as usize] != self.variable_registers[y_reg as usize] {
+            self.pc += 2;
+        }
     }
 }

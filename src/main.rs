@@ -1,5 +1,5 @@
 mod emulator;
-mod nibbles;
+mod opcode;
 
 use crate::emulator::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use clap::Parser;
