@@ -12,7 +12,7 @@ use sdl2::pixels::Color;
 use crate::emulator::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version, long_about = None)]
 struct Args {
     /// Name of the file to run in the emulator
     #[arg(short, long)]
