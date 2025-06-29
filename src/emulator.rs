@@ -1,8 +1,8 @@
-use std::mem;
+use std::{fs, mem};
 
 use crate::nibbles::Nibbles;
-const SCREEN_WIDTH: usize = 64;
-const SCREEN_HEIGHT: usize = 32;
+pub const SCREEN_WIDTH: usize = 64;
+pub const SCREEN_HEIGHT: usize = 32;
 // CHIP8 screen size is 64*32 pixels
 
 
@@ -36,14 +36,13 @@ const FONT_SET: [u8; FONT_SET_SIZE] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 ];
-// Honestly I don't understand this font data stuff too well apparently this is the common font data that is used
 
 const NUM_KEYS: usize = 16;
 // CHIP8 usually used on computers with hexidecimal keypads
 
 pub struct Emulator {
     ram: [u8; RAM_SIZE],
-    screen: [[bool; SCREEN_WIDTH]; SCREEN_HEIGHT], // bool because pixels can be either black or white
+    pub screen: [[bool; SCREEN_WIDTH]; SCREEN_HEIGHT], // bool because pixels can be either black or white
     pc: u16, // program counter, points to current instruction in memory, memory addresses are 16 bits
     i: u16, // index register, used to point to locations in memory
     stack: Vec<u16>, // stack for addresses
@@ -51,7 +50,8 @@ pub struct Emulator {
     delay_timer: u8,
     sound_timer: u8,
     variable_registers: [u8; NUM_VARIABLE_REGISTERS],
-    keypad: [bool; NUM_KEYS]
+    keypad: [bool; NUM_KEYS],
+    redraw_required: bool, // flag indicating a change to the screen was made
 }
 
 const START_ADDR: u16 = 0x200;
@@ -69,11 +69,28 @@ impl Emulator {
             delay_timer: 0,
             sound_timer: 0,
             variable_registers: [0; NUM_VARIABLE_REGISTERS],
-            keypad: [false; NUM_KEYS]
+            keypad: [false; NUM_KEYS],
+            redraw_required: false
         };
 
         emulator.ram[..FONT_SET_SIZE].copy_from_slice(&FONT_SET);
         emulator
+    }
+
+    /// Load program into memory from the specified file
+    pub fn load_file(&mut self, file: &str) {
+        let program_bytes = fs::read(file).unwrap();
+        for (i, byte) in (&program_bytes).into_iter().enumerate(){
+            self.ram[START_ADDR as usize + i] = *byte;
+        }
+    }
+
+    pub fn needs_redraw(&mut self) -> bool {
+        if self.redraw_required{
+            self.redraw_required = false;
+            return true
+        }
+        false
     }
 
     /// Execute the instruction and do what it tells you
@@ -126,6 +143,7 @@ impl Emulator {
                 self.screen[i][j] = false;
             }
         }
+        self.redraw_required = true;
     }
 
     /// Set the PC counter to `memory_location` which is 12-bit, despite using u16 to represent it
@@ -169,23 +187,27 @@ impl Emulator {
     /// drawn to (from left to right, from most to least significant bit). If any pixels on the 
     /// screen were turned “off” by this, the VF flag register is set to 1. Otherwise, it’s set to 0.
     fn display(&mut self, x_reg: u8, y_reg: u8, sprite_height: u8) {
-       let mut x_coord: usize = self.variable_registers[x_reg as usize] as usize % SCREEN_WIDTH;
-       let mut y_coord: usize = self.variable_registers[y_reg as usize] as usize % SCREEN_HEIGHT;
+       let x_coord: usize = self.variable_registers[x_reg as usize] as usize % SCREEN_WIDTH;
+       let y_coord: usize = self.variable_registers[y_reg as usize] as usize % SCREEN_HEIGHT;
        self.variable_registers[15] = 0;
 
        for i in 0..sprite_height {
-        let sprite_row: u8 = self.ram[self.i as usize];
-            for j in 0..8 {
-                let sprite_bit_on = ((sprite_row >> j) & 1) == 1;
-                if sprite_bit_on && self.screen[y_coord][x_coord] {
-                    self.screen[y_coord][x_coord] = false;
-                    self.variable_registers[15] = 1;
-                } else if sprite_bit_on && !self.screen[y_coord][x_coord] {
-                    self.screen[y_coord][x_coord] = true;
-                }
-                x_coord += 1;
+        let sprite_row: u8 = self.ram[self.i as usize + i as usize];
+        for j in 0..8 {
+            let x = x_coord + j;
+            let y = y_coord + i as usize;
+
+            // starting at leftmost part of row and going to rightmost
+            let sprite_bit_on = ((sprite_row >> (7 - j)) & 1) == 1;
+
+            if sprite_bit_on && self.screen[y][x] {
+                self.screen[y][x] = false;
+                self.variable_registers[15] = 1;
+            } else if sprite_bit_on && !self.screen[y][x] {
+                self.screen[y][x] = true;
             }
-            y_coord += 1;
+        }
        }
+       self.redraw_required = true;
     }
 }
