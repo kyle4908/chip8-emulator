@@ -1,22 +1,20 @@
 mod emulator;
 mod nibbles;
 
-use emulator::Emulator;
-use clap::Parser;
-use std::env;
-use std::time::{Duration, Instant};
-use sdl2::rect::Rect;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
 use crate::emulator::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use clap::Parser;
+use emulator::Emulator;
+use sdl2::event::Event;
+use sdl2::pixels::Color;
+use sdl2::rect::Rect;
+use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(version, long_about = None)]
 struct Args {
     /// Name of the file to run in the emulator
     #[arg(short, long)]
-    filename: String
+    filename: String,
 }
 
 fn main() -> Result<(), String> {
@@ -24,21 +22,27 @@ fn main() -> Result<(), String> {
 
     eprintln!("Playing {}", args.filename);
 
-    let pixel_size  = 16;
+    let pixel_size = 16;
 
     let context = sdl2::init()?;
-    let video_subsystem  = context.video()?;
+    let video_subsystem = context.video()?;
     let window = video_subsystem
-        .window("Chip8-Emulator", (SCREEN_WIDTH * pixel_size) as u32, (SCREEN_HEIGHT * pixel_size) as u32)
+        .window(
+            "Chip8-Emulator",
+            (SCREEN_WIDTH * pixel_size) as u32,
+            (SCREEN_HEIGHT * pixel_size) as u32,
+        )
         .build()
         .unwrap();
 
-    let mut canvas = window
-        .into_canvas()
-        .build()
-        .unwrap();
+    let mut canvas = window.into_canvas().build().unwrap();
 
-    let screen_area = Rect::new(0, 0, (SCREEN_WIDTH * pixel_size) as u32, (SCREEN_HEIGHT * pixel_size) as u32);
+    let screen_area = Rect::new(
+        0,
+        0,
+        (SCREEN_WIDTH * pixel_size) as u32,
+        (SCREEN_HEIGHT * pixel_size) as u32,
+    );
 
     let mut running = true;
     let mut event_pump = context.event_pump().unwrap();
@@ -53,7 +57,9 @@ fn main() -> Result<(), String> {
     while running {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. } => {running = false;}
+                Event::Quit { .. } => {
+                    running = false;
+                }
                 _ => {}
             }
         }

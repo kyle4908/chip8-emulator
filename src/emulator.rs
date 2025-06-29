@@ -1,17 +1,12 @@
-use std::{fs, mem};
+use std::fs;
 
 use crate::nibbles::Nibbles;
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 // CHIP8 screen size is 64*32 pixels
 
-
 const RAM_SIZE: usize = 4096;
 // CHIP8 memory size is 4 kilobytes
-
-const STACK_SIZE: usize = 16;
-// kinda arbitrary, it doesn't necessarily need to be limited, I just did it for safety since most other emulators do it
-// and the emulator will never realistically use all this anyway
 
 const NUM_VARIABLE_REGISTERS: usize = 16;
 // 16 variable registers in CHIP8
@@ -34,7 +29,7 @@ const FONT_SET: [u8; FONT_SET_SIZE] = [
     0xF0, 0x80, 0x80, 0x80, 0xF0, // C
     0xE0, 0x90, 0x90, 0x90, 0xE0, // D
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
 const NUM_KEYS: usize = 16;
@@ -44,7 +39,7 @@ pub struct Emulator {
     ram: [u8; RAM_SIZE],
     pub screen: [[bool; SCREEN_WIDTH]; SCREEN_HEIGHT], // bool because pixels can be either black or white
     pc: u16, // program counter, points to current instruction in memory, memory addresses are 16 bits
-    i: u16, // index register, used to point to locations in memory
+    i: u16,  // index register, used to point to locations in memory
     stack: Vec<u16>, // stack for addresses
     // stack_pointer: u16, // points to the current index we are at on the "stack"
     delay_timer: u8,
@@ -70,7 +65,7 @@ impl Emulator {
             sound_timer: 0,
             variable_registers: [0; NUM_VARIABLE_REGISTERS],
             keypad: [false; NUM_KEYS],
-            redraw_required: false
+            redraw_required: false,
         };
 
         emulator.ram[..FONT_SET_SIZE].copy_from_slice(&FONT_SET);
@@ -80,15 +75,17 @@ impl Emulator {
     /// Load program into memory from the specified file
     pub fn load_file(&mut self, file: &str) {
         let program_bytes = fs::read(file).unwrap();
-        for (i, byte) in (&program_bytes).into_iter().enumerate(){
+        for (i, byte) in (program_bytes).iter().enumerate() {
             self.ram[START_ADDR as usize + i] = *byte;
         }
     }
 
+    /// Tells if the emulator needs a redraw, automatically updated the redraw required
+    /// flag back to false when a redraw is required
     pub fn needs_redraw(&mut self) -> bool {
-        if self.redraw_required{
+        if self.redraw_required {
             self.redraw_required = false;
-            return true
+            return true;
         }
         false
     }
@@ -98,19 +95,21 @@ impl Emulator {
         let decoded_operation: Nibbles = self.decode();
 
         match decoded_operation.category {
-            0x0 => {
-                match decoded_operation.nnn {
-                    0x0E0 => self.clear_screen(),
-                    0x0EE => self.subroutine_exit(),
-                    _ => {}
-                }
-            }
+            0x0 => match decoded_operation.nnn {
+                0x0E0 => self.clear_screen(),
+                0x0EE => self.subroutine_exit(),
+                _ => {}
+            },
             0x1 => self.jump(decoded_operation.nnn),
             0x2 => self.subroutine_call(decoded_operation.nnn),
             0x6 => self.set_register(decoded_operation.x, decoded_operation.nn),
             0x7 => self.add_to_register(decoded_operation.x, decoded_operation.nn),
             0xA => self.set_index_register(decoded_operation.nnn),
-            0xD => self.display(decoded_operation.x, decoded_operation.y, decoded_operation.n),
+            0xD => self.display(
+                decoded_operation.x,
+                decoded_operation.y,
+                decoded_operation.n,
+            ),
             _ => {}
         }
     }
@@ -132,7 +131,7 @@ impl Emulator {
     fn fetch_next_byte(&mut self) -> u8 {
         let byte: u8 = self.ram[self.pc as usize];
         self.pc += 1;
-        self.pc = self.pc % (RAM_SIZE as u16);
+        self.pc %= RAM_SIZE as u16;
         byte
     }
 
@@ -161,7 +160,7 @@ impl Emulator {
     /// Pop the last instruction from the stack and set the PC to it.
     /// used to return from a subroutine
     fn subroutine_exit(&mut self) {
-        self.pc = self.stack.pop().expect("Expected stack to contain an instruction when exiting a subroutine");
+        self.pc = self.stack.pop().unwrap();
     }
 
     /// Set register `reg` to `value`
@@ -181,33 +180,33 @@ impl Emulator {
         self.i = value
     }
 
-    /// It will draw an N pixels tall sprite from the memory location that the I index register 
-    /// is holding to the screen, at the horizontal X coordinate in VX and the Y coordinate in VY. 
-    /// All the pixels that are “on” in the sprite will flip the pixels on the screen that it is 
-    /// drawn to (from left to right, from most to least significant bit). If any pixels on the 
+    /// Draw an N pixels tall sprite from the memory location that the index register
+    /// is holding to the screen, at the X coordinate in `x_reg` and the Y coordinate in `y_reg`.
+    /// All the pixels that are “on” in the sprite will flip the pixels on the screen that it is
+    /// drawn to (from left to right, from most to least significant bit). If any pixels on the
     /// screen were turned “off” by this, the VF flag register is set to 1. Otherwise, it’s set to 0.
     fn display(&mut self, x_reg: u8, y_reg: u8, sprite_height: u8) {
-       let x_coord: usize = self.variable_registers[x_reg as usize] as usize % SCREEN_WIDTH;
-       let y_coord: usize = self.variable_registers[y_reg as usize] as usize % SCREEN_HEIGHT;
-       self.variable_registers[15] = 0;
+        let x_coord: usize = self.variable_registers[x_reg as usize] as usize % SCREEN_WIDTH;
+        let y_coord: usize = self.variable_registers[y_reg as usize] as usize % SCREEN_HEIGHT;
+        self.variable_registers[15] = 0;
 
-       for i in 0..sprite_height {
-        let sprite_row: u8 = self.ram[self.i as usize + i as usize];
-        for j in 0..8 {
-            let x = x_coord + j;
-            let y = y_coord + i as usize;
+        for i in 0..sprite_height {
+            let sprite_row: u8 = self.ram[self.i as usize + i as usize];
+            for j in 0..8 {
+                let x = x_coord + j;
+                let y = y_coord + i as usize;
 
-            // starting at leftmost part of row and going to rightmost
-            let sprite_bit_on = ((sprite_row >> (7 - j)) & 1) == 1;
+                // starting at leftmost part of row and going to rightmost
+                let sprite_bit_on = ((sprite_row >> (7 - j)) & 1) == 1;
 
-            if sprite_bit_on && self.screen[y][x] {
-                self.screen[y][x] = false;
-                self.variable_registers[15] = 1;
-            } else if sprite_bit_on && !self.screen[y][x] {
-                self.screen[y][x] = true;
+                if sprite_bit_on && self.screen[y][x] {
+                    self.screen[y][x] = false;
+                    self.variable_registers[15] = 1;
+                } else if sprite_bit_on && !self.screen[y][x] {
+                    self.screen[y][x] = true;
+                }
             }
         }
-       }
-       self.redraw_required = true;
+        self.redraw_required = true;
     }
 }

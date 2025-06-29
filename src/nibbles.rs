@@ -7,15 +7,15 @@ pub struct Nibbles {
     pub nnn: u16, //The second, third and fourth nibbles. A 12-bit immediate memory address
 }
 
-impl Nibbles{
+impl Nibbles {
     pub fn new(instruction: u16) -> Self {
-        Self { 
+        Self {
             category: ((instruction & 0xF000) >> 12) as u8,
-            x: ((instruction & 0x0F00) >> 8) as u8, 
-            y: ((instruction & 0x00F0) >> 4) as u8, 
-            n: (instruction & 0x000F) as u8, 
-            nn: (instruction & 0x00FF) as u8, 
-            nnn: (instruction & 0x0FFF) 
+            x: ((instruction & 0x0F00) >> 8) as u8,
+            y: ((instruction & 0x00F0) >> 4) as u8,
+            n: (instruction & 0x000F) as u8,
+            nn: (instruction & 0x00FF) as u8,
+            nnn: (instruction & 0x0FFF),
         }
     }
 }
