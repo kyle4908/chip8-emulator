@@ -1,3 +1,7 @@
+mod emulator;
+mod nibbles;
+
+use emulator::Emulator;
+
 fn main() {
-    println!("Hello, world!");
 }
