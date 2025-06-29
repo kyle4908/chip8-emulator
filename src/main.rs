@@ -5,8 +5,9 @@ use crate::emulator::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use clap::Parser;
 use emulator::Emulator;
 use sdl2::event::Event;
-use sdl2::pixels::Color;
+use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
+use sdl2::render::TextureAccess;
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
@@ -33,9 +34,9 @@ fn main() -> Result<(), String> {
             (SCREEN_HEIGHT * pixel_size) as u32,
         )
         .build()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
 
-    let mut canvas = window.into_canvas().build().unwrap();
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
 
     let screen_area = Rect::new(
         0,
@@ -45,7 +46,18 @@ fn main() -> Result<(), String> {
     );
 
     let mut running = true;
-    let mut event_pump = context.event_pump().unwrap();
+    let mut event_pump = context.event_pump().map_err(|e| e.to_string())?;
+
+    let texture_creator = canvas.texture_creator();
+
+    let mut texture = texture_creator
+        .create_texture(
+            PixelFormatEnum::RGB332,
+            TextureAccess::Streaming,
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+        )
+        .map_err(|e| e.to_string())?;
 
     let mut emu = Emulator::new();
     emu.load_file(&args.filename);
@@ -65,25 +77,29 @@ fn main() -> Result<(), String> {
         }
         emu.execute();
         if emu.needs_redraw() {
-            canvas.clear();
-
-            for (y, row) in emu.screen.iter().enumerate() {
-                for (x, &value) in row.iter().enumerate() {
-                    if value {
-                        canvas.set_draw_color(Color::WHITE);
-                    } else {
-                        canvas.set_draw_color(Color::BLACK);
+            texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                for y in 0..SCREEN_HEIGHT {
+                    for x in 0..SCREEN_WIDTH {
+                        let offset = y * pitch + x;
+                        buffer[offset] = if emu.screen[y][x] {
+                            0xFF // white
+                        } else {
+                            0x00 // black
+                        };
                     }
-
-                    let rect = Rect::new(
-                        (x * pixel_size) as i32,
-                        (y * pixel_size) as i32,
-                        pixel_size as u32,
-                        pixel_size as u32,
-                    );
-                    canvas.fill_rect(rect)?;
                 }
-            }
+            })?;
+            canvas.clear();
+            canvas.copy(
+                &texture,
+                None,
+                Some(Rect::new(
+                    0,
+                    0,
+                    (SCREEN_WIDTH * pixel_size) as u32,
+                    (SCREEN_HEIGHT * pixel_size) as u32,
+                )),
+            )?;
             canvas.present();
         }
         std::thread::sleep(Duration::new(0, 140000));
