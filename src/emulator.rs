@@ -116,9 +116,13 @@ impl Emulator {
                 0x2 => self.bitwise_and(decoded_operation.x, decoded_operation.y),
                 0x3 => self.bitwise_xor(decoded_operation.x, decoded_operation.y),
                 0x4 => self.add_register_to_register(decoded_operation.x, decoded_operation.y),
-                0x5 => self.subtract_yregister_from_xregister(decoded_operation.x, decoded_operation.y),
+                0x5 => {
+                    self.subtract_yregister_from_xregister(decoded_operation.x, decoded_operation.y)
+                }
                 0x6 => self.shift_to_right(decoded_operation.x, decoded_operation.y, false),
-                0x7 => self.subtract_xregister_from_yregister(decoded_operation.x, decoded_operation.y),
+                0x7 => {
+                    self.subtract_xregister_from_yregister(decoded_operation.x, decoded_operation.y)
+                }
                 0xE => self.shift_to_left(decoded_operation.x, decoded_operation.y, false),
                 _ => {}
             },
