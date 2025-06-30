@@ -108,8 +108,20 @@ impl Emulator {
                 0x0 => self.skip_if_regs_equal(decoded_operation.x, decoded_operation.y),
                 _ => {}
             },
-            0x6 => self.set_register(decoded_operation.x, decoded_operation.nn),
-            0x7 => self.add_to_register(decoded_operation.x, decoded_operation.nn),
+            0x6 => self.set_register_to_val(decoded_operation.x, decoded_operation.nn),
+            0x7 => self.add_val_to_register(decoded_operation.x, decoded_operation.nn),
+            0x8 => match decoded_operation.n {
+                0x0 => self.set_register_to_register(decoded_operation.x, decoded_operation.y),
+                0x1 => self.bitwise_or(decoded_operation.x, decoded_operation.y),
+                0x2 => self.bitwise_and(decoded_operation.x, decoded_operation.y),
+                0x3 => self.bitwise_xor(decoded_operation.x, decoded_operation.y),
+                0x4 => self.add_register_to_register(decoded_operation.x, decoded_operation.y),
+                0x5 => self.subtract_yregister_from_xregister(decoded_operation.x, decoded_operation.y),
+                0x6 => self.shift_to_right(decoded_operation.x, decoded_operation.y, false),
+                0x7 => self.subtract_xregister_from_yregister(decoded_operation.x, decoded_operation.y),
+                0xE => self.shift_to_left(decoded_operation.x, decoded_operation.y, false),
+                _ => {}
+            },
             0x9 => match decoded_operation.n {
                 0x0 => self.skip_if_regs_not_equal(decoded_operation.x, decoded_operation.y),
                 _ => {}
@@ -174,13 +186,13 @@ impl Emulator {
     }
 
     /// Set register `reg` to `value`
-    fn set_register(&mut self, reg: u8, value: u8) {
+    fn set_register_to_val(&mut self, reg: u8, value: u8) {
         self.variable_registers[reg as usize] = value;
     }
 
     /// Add `value` to register `reg`
     /// Do not set carry flag on overflow
-    fn add_to_register(&mut self, reg: u8, value: u8) {
+    fn add_val_to_register(&mut self, reg: u8, value: u8) {
         let i: usize = reg as usize;
         self.variable_registers[i] = self.variable_registers[i].wrapping_add(value)
     }
@@ -250,5 +262,85 @@ impl Emulator {
         if self.variable_registers[x_reg as usize] != self.variable_registers[y_reg as usize] {
             self.pc += 2;
         }
+    }
+
+    /// Sets register `x_reg` to the value of register `y_reg`
+    fn set_register_to_register(&mut self, x_reg: u8, y_reg: u8) {
+        self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize];
+    }
+
+    /// Sets register `x_reg` to the result of a bitwise OR between the values in
+    /// registers `x_reg` and `y_reg`
+    fn bitwise_or(&mut self, x_reg: u8, y_reg: u8) {
+        self.variable_registers[x_reg as usize] |= self.variable_registers[y_reg as usize];
+    }
+
+    /// Sets register `x_reg` to the result of a bitwise AND between the values in
+    /// registers `x_reg` and `y_reg`
+    fn bitwise_and(&mut self, x_reg: u8, y_reg: u8) {
+        self.variable_registers[x_reg as usize] &= self.variable_registers[y_reg as usize];
+    }
+
+    /// Sets register `x_reg` to the result of a bitwise XOR between the values in
+    /// registers `x_reg` and `y_reg`
+    fn bitwise_xor(&mut self, x_reg: u8, y_reg: u8) {
+        self.variable_registers[x_reg as usize] ^= self.variable_registers[y_reg as usize];
+    }
+
+    /// Sets register `x_reg` to the result of adding the value of `y_reg` to it
+    /// If overflow occurs, sets the flag register to 1, otherwise sets it to 0
+    fn add_register_to_register(&mut self, x_reg: u8, y_reg: u8) {
+        let mut overflow: bool = false;
+        (self.variable_registers[x_reg as usize], overflow) = self.variable_registers
+            [x_reg as usize]
+            .overflowing_add(self.variable_registers[y_reg as usize]);
+
+        self.variable_registers[15] = if overflow { 1 } else { 0 }
+    }
+
+    /// Sets register `x_reg` to the result of subtracting the value of `y_reg` from it
+    /// If overflow occurs, sets the flag register to 0, otherwise sets it to 1
+    fn subtract_yregister_from_xregister(&mut self, x_reg: u8, y_reg: u8) {
+        let mut overflow: bool = false;
+        (self.variable_registers[x_reg as usize], overflow) = self.variable_registers
+            [x_reg as usize]
+            .overflowing_sub(self.variable_registers[y_reg as usize]);
+
+        self.variable_registers[15] = if overflow { 0 } else { 1 }
+    }
+
+    /// Sets register `x_reg` to the result of subtracting it from the value of `y_reg`
+    /// If overflow occurs, sets the flag register to 0, otherwise sets it to 1
+    fn subtract_xregister_from_yregister(&mut self, x_reg: u8, y_reg: u8) {
+        let mut overflow: bool = false;
+        (self.variable_registers[x_reg as usize], overflow) = self.variable_registers
+            [y_reg as usize]
+            .overflowing_sub(self.variable_registers[x_reg as usize]);
+
+        self.variable_registers[15] = if overflow { 0 } else { 1 }
+    }
+
+    /// Shifts the value in `x_reg` one to the right. If `modern_instructions` is false,
+    /// then `y_reg` the value of `x_reg` becomes the value of `y_reg` before shifting,
+    /// making it so it's the shifted value of `y_reg` that exists in `x_reg`.
+    /// Sets the flag register to the value of the bit that was shifted out.
+    fn shift_to_right(&mut self, x_reg: u8, y_reg: u8, modern_instructions: bool) {
+        if !modern_instructions {
+            self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize]
+        }
+        self.variable_registers[15] = self.variable_registers[x_reg as usize] & 1;
+        self.variable_registers[x_reg as usize] >>= 1;
+    }
+
+    /// Shifts the value in `x_reg` one to the left. If `modern_instructions` is false,
+    /// then `y_reg` the value of `x_reg` becomes the value of `y_reg` before shifting,
+    /// making it so it's the shifted value of `y_reg` that exists in `x_reg`.
+    /// Sets the flag register to the value of the bit that was shifted out.
+    fn shift_to_left(&mut self, x_reg: u8, y_reg: u8, modern_instructions: bool) {
+        if !modern_instructions {
+            self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize]
+        }
+        self.variable_registers[15] = (self.variable_registers[x_reg as usize] >> 7) & 1;
+        self.variable_registers[x_reg as usize] <<= 1;
     }
 }
