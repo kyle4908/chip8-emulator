@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 pub struct Opcode {
     pub category: u8, // The first 4 bits (bit 1-4). Tells you what kind of instruction it is
     pub x: u8, // The second 4 bits (bit 5-8). Used to look up one of the 16 registers (VX) from V0 through VF
@@ -5,6 +7,19 @@ pub struct Opcode {
     pub n: u8, // The fourth 4 bits (bit 13-16).
     pub nn: u8, // The second byte (bit 9-16). An 8-bit immediate number
     pub nnn: u16, //The last 12 bits of the opcode (bit 5-16). A 12-bit immediate memory address
+}
+
+impl Debug for Opcode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpCode")
+            .field("category", &format_args!("{:#X}", self.category))
+            .field("x", &format_args!("{:#X}", self.x))
+            .field("y", &format_args!("{:#X}", self.y))
+            .field("n", &format_args!("{:#X}", self.n))
+            .field("nn", &format_args!("{:#X}", self.nn))
+            .field("nnn", &format_args!("{:#X}", self.nnn))
+            .finish()
+    }
 }
 
 impl Opcode {

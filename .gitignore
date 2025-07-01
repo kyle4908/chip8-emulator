@@ -1,2 +1,4 @@
 /target
 *.ch8
+.env
+*.log

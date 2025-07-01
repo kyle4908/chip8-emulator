@@ -5,4 +5,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
+dotenvy = "0.15.7"
+env_logger = "0.11.8"
+log = "0.4.27"
 sdl2 = { version = "0.37.0", features = ["bundled"] }
