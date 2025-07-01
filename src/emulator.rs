@@ -1,9 +1,9 @@
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use std::fs;
 
 use std::time::{Duration, Instant};
 
-use crate::keypad::Keypad;
+use crate::keypad::{Keypad, NUM_KEYS};
 use crate::opcode::Opcode;
 
 pub const SCREEN_WIDTH: usize = 64;
@@ -179,6 +179,7 @@ impl Emulator {
             },
             0xF => match decoded_operation.nn {
                 0x07 => self.set_register_to_delay_timer(decoded_operation.x),
+                0x0A => self.block_and_wait_for_key(decoded_operation.x),
                 0x15 => self.set_delay_timer_to_register_value(decoded_operation.x),
                 0x18 => self.set_sound_timer_to_register_value(decoded_operation.x),
                 0x1E => self.add_register_to_index_register(decoded_operation.x),
@@ -502,6 +503,19 @@ impl Emulator {
         } else {
             self.i = result
         }
+    }
+
+    /// Stop executing instructions until a key is pressed
+    /// when a key is pressed, put its value into the register `reg`
+    fn block_and_wait_for_key(&mut self, reg: u8) {
+        info!("Waiting for a key press, to put into register {}", reg);
+        for i in 0..NUM_KEYS {
+            if self.keypad.get_keys()[i] {
+                self.variable_registers[i] = i as u8;
+                return;
+            }
+        }
+        self.pc -= 2; // Since PC was incremented on fetch, decrementing to simulate blocking
     }
 }
 

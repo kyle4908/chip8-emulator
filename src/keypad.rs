@@ -1,6 +1,6 @@
 use sdl2::keyboard::Keycode;
 
-const NUM_KEYS: usize = 16;
+pub const NUM_KEYS: usize = 16;
 // CHIP8 usually used on computers with hexidecimal keypads
 
 pub struct Keypad {
