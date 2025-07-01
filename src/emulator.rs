@@ -1,5 +1,5 @@
+use log::{debug, error, warn};
 use std::fs;
-use log::{debug, warn, error};
 
 use crate::opcode::Opcode;
 pub const SCREEN_WIDTH: usize = 64;
@@ -106,7 +106,7 @@ impl Emulator {
             0x0 => match decoded_operation.nnn {
                 0x0E0 => self.clear_screen(),
                 0x0EE => self.subroutine_exit(),
-                _ => {warn!("Unknown Operation {:?}", decoded_operation);}
+                _ => warn_unknown_operation(decoded_operation),
             },
             0x1 => self.jump(decoded_operation.nnn),
             0x2 => self.subroutine_call(decoded_operation.nnn),
@@ -114,7 +114,7 @@ impl Emulator {
             0x4 => self.skip_if_not_equal(decoded_operation.x, decoded_operation.nn),
             0x5 => match decoded_operation.n {
                 0x0 => self.skip_if_regs_equal(decoded_operation.x, decoded_operation.y),
-                _ => {warn!("Unknown Operation {:?}", decoded_operation);}
+                _ => warn_unknown_operation(decoded_operation),
             },
             0x6 => self.set_register_to_val(decoded_operation.x, decoded_operation.nn),
             0x7 => self.add_val_to_register(decoded_operation.x, decoded_operation.nn),
@@ -132,19 +132,23 @@ impl Emulator {
                     self.subtract_xregister_from_yregister(decoded_operation.x, decoded_operation.y)
                 }
                 0xE => self.shift_to_left(decoded_operation.x, decoded_operation.y),
-                _ => {warn!("Unknown Operation {:?}", decoded_operation);}
+                _ => warn_unknown_operation(decoded_operation),
             },
             0x9 => match decoded_operation.n {
                 0x0 => self.skip_if_regs_not_equal(decoded_operation.x, decoded_operation.y),
-                _ => {warn!("Unknown Operation {:?}", decoded_operation);}
+                _ => {
+                    warn!("Unknown Operation {:?}", decoded_operation);
+                }
             },
             0xA => self.set_index_register(decoded_operation.nnn),
+            0xB => self.jump_with_offset(decoded_operation.x, decoded_operation.nnn),
+            0xC => self.random(decoded_operation.x, decoded_operation.nn),
             0xD => self.display(
                 decoded_operation.x,
                 decoded_operation.y,
                 decoded_operation.n,
             ),
-            _ => {warn!("Unknown Operation {:?}", decoded_operation)}
+            _ => warn_unknown_operation(decoded_operation),
         }
     }
 
@@ -234,7 +238,10 @@ impl Emulator {
     /// drawn to (from left to right, from most to least significant bit). If any pixels on the
     /// screen were turned “off” by this, the VF flag register is set to 1. Otherwise, it’s set to 0.
     fn display(&mut self, x_reg: u8, y_reg: u8, sprite_height: u8) {
-        debug!("Drawing {} pixel tall sprite, using X=V[{}], Y=V[{}]", sprite_height, y_reg, x_reg);
+        debug!(
+            "Drawing {} pixel tall sprite, using X=V[{}], Y=V[{}]",
+            sprite_height, y_reg, x_reg
+        );
         let x_coord: usize = self.variable_registers[x_reg as usize] as usize % SCREEN_WIDTH;
         let y_coord: usize = self.variable_registers[y_reg as usize] as usize % SCREEN_HEIGHT;
         self.variable_registers[15] = 0;
@@ -289,7 +296,10 @@ impl Emulator {
     /// Check if the value in `x_reg` is not equal to the value in `y_reg` and
     /// increments PC by 2 if that's the case
     fn skip_if_regs_not_equal(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Skipping if Register {} does not equal Register {}", x_reg, y_reg);
+        debug!(
+            "Skipping if Register {} does not equal Register {}",
+            x_reg, y_reg
+        );
         if self.variable_registers[x_reg as usize] != self.variable_registers[y_reg as usize] {
             self.pc += 2;
         }
@@ -297,7 +307,10 @@ impl Emulator {
 
     /// Sets register `x_reg` to the value of register `y_reg`
     fn set_register_to_register(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Setting if Register {} to value of Register {}", x_reg, y_reg);
+        debug!(
+            "Setting if Register {} to value of Register {}",
+            x_reg, y_reg
+        );
         self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize];
     }
 
@@ -326,11 +339,9 @@ impl Emulator {
     /// If overflow occurs, sets the flag register to 1, otherwise sets it to 0
     fn add_register_to_register(&mut self, x_reg: u8, y_reg: u8) {
         debug!("Adding value of Register {} to Register {}", y_reg, x_reg);
-        let mut overflow: bool = false;
-        (self.variable_registers[x_reg as usize], overflow) = self.variable_registers
-            [x_reg as usize]
+        let (result, overflow) = self.variable_registers[x_reg as usize]
             .overflowing_add(self.variable_registers[y_reg as usize]);
-
+        self.variable_registers[x_reg as usize] = result;
         self.variable_registers[15] = if overflow { 1 } else { 0 }
     }
 
@@ -338,8 +349,7 @@ impl Emulator {
     /// If overflow occurs, sets the flag register to 0, otherwise sets it to 1
     fn subtract_yregister_from_xregister(&mut self, x_reg: u8, y_reg: u8) {
         debug!("Subtracting value of Register {} from {}", y_reg, x_reg);
-        let (result, overflow) = self.variable_registers
-            [x_reg as usize]
+        let (result, overflow) = self.variable_registers[x_reg as usize]
             .overflowing_sub(self.variable_registers[y_reg as usize]);
         self.variable_registers[x_reg as usize] = result;
         self.variable_registers[15] = if overflow { 0 } else { 1 }
@@ -349,8 +359,7 @@ impl Emulator {
     /// If overflow occurs, sets the flag register to 0, otherwise sets it to 1
     fn subtract_xregister_from_yregister(&mut self, x_reg: u8, y_reg: u8) {
         debug!("Subtracting value of Register {} from {}", x_reg, y_reg);
-        let (result, overflow) = self.variable_registers
-            [y_reg as usize]
+        let (result, overflow) = self.variable_registers[y_reg as usize]
             .overflowing_sub(self.variable_registers[x_reg as usize]);
         self.variable_registers[x_reg as usize] = result;
         self.variable_registers[15] = if overflow { 0 } else { 1 }
@@ -381,4 +390,26 @@ impl Emulator {
         self.variable_registers[15] = (self.variable_registers[x_reg as usize] >> 7) & 1;
         self.variable_registers[x_reg as usize] <<= 1;
     }
+
+    /// Jump to memory location of the Register 0 plus the `offset`.
+    /// If `use_x_on_jump` is true, then uses Register X instead of Register 0.
+    fn jump_with_offset(&mut self, x_reg: u8, offset: u16) {
+        debug!("Jumping with offset {:#X}", offset);
+        self.pc = if self.use_x_on_jump {
+            self.variable_registers[x_reg as usize] as u16 + offset
+        } else {
+            self.variable_registers[0] as u16 + offset
+        }
+    }
+
+    /// Generate a random u8 number, binary AND it with `value` and put the result into
+    /// register `x_reg`
+    fn random(&mut self, x_reg: u8, value: u8) {
+        debug!("Generating random number");
+        self.variable_registers[x_reg as usize] = rand::random_range(0..=255) & value;
+    }
+}
+
+fn warn_unknown_operation(operation: Opcode) {
+    warn!("Unknown Operation {:?}", operation);
 }
