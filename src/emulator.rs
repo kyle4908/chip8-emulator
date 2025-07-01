@@ -181,6 +181,7 @@ impl Emulator {
                 0x07 => self.set_register_to_delay_timer(decoded_operation.x),
                 0x15 => self.set_delay_timer_to_register_value(decoded_operation.x),
                 0x18 => self.set_sound_timer_to_register_value(decoded_operation.x),
+                0x1E => self.add_register_to_index_register(decoded_operation.x),
                 _ => warn_unknown_operation(decoded_operation),
             },
             _ => warn_unknown_operation(decoded_operation),
@@ -238,7 +239,7 @@ impl Emulator {
     /// Pop the last instruction from the stack and set the PC to it.
     /// used to return from a subroutine
     fn subroutine_exit(&mut self) {
-        debug!("Exiting Subroutine");
+        debug!("Exiting subroutine");
         if let Some(exit_location) = self.stack.pop() {
             self.pc = exit_location
         } else {
@@ -249,14 +250,14 @@ impl Emulator {
 
     /// Set register `reg` to `value`
     fn set_register_to_val(&mut self, reg: u8, value: u8) {
-        debug!("Setting Register {} to value {}", reg, value);
+        debug!("Setting register {} to value {}", reg, value);
         self.variable_registers[reg as usize] = value;
     }
 
     /// Add `value` to register `reg`
     /// Do not set carry flag on overflow
     fn add_val_to_register(&mut self, reg: u8, value: u8) {
-        debug!("Adding value {} to Register {}", value, reg);
+        debug!("Adding value {} to register {}", value, reg);
         let i: usize = reg as usize;
         self.variable_registers[i] = self.variable_registers[i].wrapping_add(value)
     }
@@ -304,7 +305,7 @@ impl Emulator {
     /// Check if the value in `reg_num` is equal to `value` and increments PC by 2
     /// if that's the case
     fn skip_if_equal(&mut self, reg_num: u8, value: u8) {
-        debug!("Skipping if Register {} equals {}", reg_num, value);
+        debug!("Skipping if register {} equals {}", reg_num, value);
         if self.variable_registers[reg_num as usize] == value {
             self.pc += 2;
         }
@@ -313,7 +314,7 @@ impl Emulator {
     /// Check if the value in `reg_num` is not equal to `value` and increments PC by 2
     /// if that's the case
     fn skip_if_not_equal(&mut self, reg_num: u8, value: u8) {
-        debug!("Skipping if Register {} does not equal {}", reg_num, value);
+        debug!("Skipping if register {} does not equal {}", reg_num, value);
         if self.variable_registers[reg_num as usize] != value {
             self.pc += 2;
         }
@@ -322,7 +323,7 @@ impl Emulator {
     /// Check if the value in `x_reg` is equal to the value in `y_reg` and
     /// increments PC by 2 if that's the case
     fn skip_if_regs_equal(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Skipping if Register {} equals Register {}", x_reg, y_reg);
+        debug!("Skipping if register {} equals register {}", x_reg, y_reg);
         if self.variable_registers[x_reg as usize] == self.variable_registers[y_reg as usize] {
             self.pc += 2;
         }
@@ -332,7 +333,7 @@ impl Emulator {
     /// increments PC by 2 if that's the case
     fn skip_if_regs_not_equal(&mut self, x_reg: u8, y_reg: u8) {
         debug!(
-            "Skipping if Register {} does not equal Register {}",
+            "Skipping if register {} does not equal register {}",
             x_reg, y_reg
         );
         if self.variable_registers[x_reg as usize] != self.variable_registers[y_reg as usize] {
@@ -343,7 +344,7 @@ impl Emulator {
     /// Sets register `x_reg` to the value of register `y_reg`
     fn set_register_to_register(&mut self, x_reg: u8, y_reg: u8) {
         debug!(
-            "Setting if Register {} to value of Register {}",
+            "Setting if register {} to value of register {}",
             x_reg, y_reg
         );
         self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize];
@@ -352,28 +353,28 @@ impl Emulator {
     /// Sets register `x_reg` to the result of a bitwise OR between the values in
     /// registers `x_reg` and `y_reg`
     fn bitwise_or(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Bitwise OR of Register {} and {}", x_reg, y_reg);
+        debug!("Bitwise OR of register {} and {}", x_reg, y_reg);
         self.variable_registers[x_reg as usize] |= self.variable_registers[y_reg as usize];
     }
 
     /// Sets register `x_reg` to the result of a bitwise AND between the values in
     /// registers `x_reg` and `y_reg`
     fn bitwise_and(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Bitwise AND of Register {} and {}", x_reg, y_reg);
+        debug!("Bitwise AND of register {} and {}", x_reg, y_reg);
         self.variable_registers[x_reg as usize] &= self.variable_registers[y_reg as usize];
     }
 
     /// Sets register `x_reg` to the result of a bitwise XOR between the values in
     /// registers `x_reg` and `y_reg`
     fn bitwise_xor(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Bitwise XOR of Register {} and {}", x_reg, y_reg);
+        debug!("Bitwise XOR of register {} and {}", x_reg, y_reg);
         self.variable_registers[x_reg as usize] ^= self.variable_registers[y_reg as usize];
     }
 
     /// Sets register `x_reg` to the result of adding the value of `y_reg` to it
     /// If overflow occurs, sets the flag register to 1, otherwise sets it to 0
     fn add_register_to_register(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Adding value of Register {} to Register {}", y_reg, x_reg);
+        debug!("Adding value of register {} to register {}", y_reg, x_reg);
         let (result, overflow) = self.variable_registers[x_reg as usize]
             .overflowing_add(self.variable_registers[y_reg as usize]);
         self.variable_registers[x_reg as usize] = result;
@@ -383,7 +384,7 @@ impl Emulator {
     /// Sets register `x_reg` to the result of subtracting the value of `y_reg` from it
     /// If overflow occurs, sets the flag register to 0, otherwise sets it to 1
     fn subtract_yregister_from_xregister(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Subtracting value of Register {} from {}", y_reg, x_reg);
+        debug!("Subtracting value of register {} from {}", y_reg, x_reg);
         let (result, overflow) = self.variable_registers[x_reg as usize]
             .overflowing_sub(self.variable_registers[y_reg as usize]);
         self.variable_registers[x_reg as usize] = result;
@@ -393,7 +394,7 @@ impl Emulator {
     /// Sets register `x_reg` to the result of subtracting it from the value of `y_reg`
     /// If overflow occurs, sets the flag register to 0, otherwise sets it to 1
     fn subtract_xregister_from_yregister(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Subtracting value of Register {} from {}", x_reg, y_reg);
+        debug!("Subtracting value of register {} from {}", x_reg, y_reg);
         let (result, overflow) = self.variable_registers[y_reg as usize]
             .overflowing_sub(self.variable_registers[x_reg as usize]);
         self.variable_registers[x_reg as usize] = result;
@@ -405,7 +406,7 @@ impl Emulator {
     /// making it so it's the shifted value of `y_reg` that exists in `x_reg`.
     /// Sets the flag register to the value of the bit that was shifted out.
     fn shift_to_right(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Shifting value of Register to the right");
+        debug!("Shifting value of register to the right");
         if self.use_y_on_shift {
             self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize]
         }
@@ -418,7 +419,7 @@ impl Emulator {
     /// making it so it's the shifted value of `y_reg` that exists in `x_reg`.
     /// Sets the flag register to the value of the bit that was shifted out.
     fn shift_to_left(&mut self, x_reg: u8, y_reg: u8) {
-        debug!("Shifting value of Register to the left");
+        debug!("Shifting value of register to the left");
         if self.use_y_on_shift {
             self.variable_registers[x_reg as usize] = self.variable_registers[y_reg as usize]
         }
@@ -448,7 +449,7 @@ impl Emulator {
     /// register `x_reg` is pressed
     fn skip_if_key_pressed(&mut self, reg: u8) {
         debug!(
-            "Skipping next instruction if key in Register {} is pressed",
+            "Skipping next instruction if key in register {} is pressed",
             reg
         );
         if self.keypad.get_keys()[self.variable_registers[reg as usize] as usize] {
@@ -460,7 +461,7 @@ impl Emulator {
     /// register `x_reg` is not pressed
     fn skip_if_key_not_pressed(&mut self, reg: u8) {
         debug!(
-            "Skipping next instruction if key in Register {} is not pressed",
+            "Skipping next instruction if key in register {} is not pressed",
             reg
         );
         if !self.keypad.get_keys()[self.variable_registers[reg as usize] as usize] {
@@ -487,6 +488,20 @@ impl Emulator {
     fn set_sound_timer_to_register_value(&mut self, reg: u8) {
         debug!("Setting sound timer to value in register {}", reg);
         self.sound_timer = self.variable_registers[reg as usize];
+    }
+
+    /// Adds value of register `reg` to index register and sets
+    /// overflow flag if overflow occurs
+    /// see note here: https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fx1e-add-to-index
+    fn add_register_to_index_register(&mut self, reg: u8) {
+        debug!("Adding value of register {} to index register", reg);
+        let result: u16 = self.i + self.variable_registers[reg as usize] as u16;
+        if result > 0xFFF {
+            self.variable_registers[15] = 1;
+            self.i = result - 0x1000
+        } else {
+            self.i = result
+        }
     }
 }
 
