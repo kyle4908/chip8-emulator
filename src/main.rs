@@ -1,4 +1,5 @@
 mod emulator;
+mod keypad;
 mod opcode;
 
 use crate::emulator::{SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -90,6 +91,16 @@ fn main() -> Result<(), String> {
             match event {
                 Event::Quit { .. } => {
                     running = false;
+                }
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => {
+                    emu.keypad.key_down(key);
+                }
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } => {
+                    emu.keypad.key_up(key);
                 }
                 _ => {}
             }

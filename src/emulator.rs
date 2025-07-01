@@ -1,6 +1,7 @@
 use log::{debug, error, warn};
 use std::fs;
 
+use crate::keypad::Keypad;
 use crate::opcode::Opcode;
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
@@ -33,9 +34,6 @@ const FONT_SET: [u8; FONT_SET_SIZE] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
-const NUM_KEYS: usize = 16;
-// CHIP8 usually used on computers with hexidecimal keypads
-
 pub struct Emulator {
     ram: [u8; RAM_SIZE],
     pub screen: [[bool; SCREEN_WIDTH]; SCREEN_HEIGHT], // bool because pixels can be either black or white
@@ -46,7 +44,7 @@ pub struct Emulator {
     delay_timer: u8,
     sound_timer: u8,
     variable_registers: [u8; NUM_VARIABLE_REGISTERS],
-    keypad: [bool; NUM_KEYS],
+    pub keypad: Keypad,
     redraw_required: bool, // flag indicating a change to the screen was made
     use_y_on_shift: bool,
     use_x_on_jump: bool,
@@ -67,7 +65,7 @@ impl Emulator {
             delay_timer: 0,
             sound_timer: 0,
             variable_registers: [0; NUM_VARIABLE_REGISTERS],
-            keypad: [false; NUM_KEYS],
+            keypad: Keypad::new(),
             redraw_required: false,
             use_y_on_shift,
             use_x_on_jump,
@@ -136,9 +134,7 @@ impl Emulator {
             },
             0x9 => match decoded_operation.n {
                 0x0 => self.skip_if_regs_not_equal(decoded_operation.x, decoded_operation.y),
-                _ => {
-                    warn!("Unknown Operation {:?}", decoded_operation);
-                }
+                _ => warn_unknown_operation(decoded_operation),
             },
             0xA => self.set_index_register(decoded_operation.nnn),
             0xB => self.jump_with_offset(decoded_operation.x, decoded_operation.nnn),
@@ -148,6 +144,11 @@ impl Emulator {
                 decoded_operation.y,
                 decoded_operation.n,
             ),
+            0xE => match decoded_operation.nn {
+                0x9E => self.skip_if_key_pressed(decoded_operation.x),
+                0xA1 => self.skip_if_key_not_pressed(decoded_operation.x),
+                _ => warn_unknown_operation(decoded_operation),
+            },
             _ => warn_unknown_operation(decoded_operation),
         }
     }
@@ -407,6 +408,22 @@ impl Emulator {
     fn random(&mut self, x_reg: u8, value: u8) {
         debug!("Generating random number");
         self.variable_registers[x_reg as usize] = rand::random_range(0..=255) & value;
+    }
+
+    /// Skip one instruction (increment PC by 2) if the key corresponding to the value in
+    /// register `x_reg` is pressed
+    fn skip_if_key_pressed(&mut self, x_reg: u8) {
+        if self.keypad.get_keys()[self.variable_registers[x_reg as usize] as usize] {
+            self.pc += 2;
+        }
+    }
+
+    /// Skip one instruction (increment PC by 2) if the key corresponding to the value in
+    /// register `x_reg` is not pressed
+    fn skip_if_key_not_pressed(&mut self, x_reg: u8) {
+        if !self.keypad.get_keys()[self.variable_registers[x_reg as usize] as usize] {
+            self.pc += 2;
+        }
     }
 }
 
