@@ -413,6 +413,7 @@ impl Emulator {
     /// Skip one instruction (increment PC by 2) if the key corresponding to the value in
     /// register `x_reg` is pressed
     fn skip_if_key_pressed(&mut self, x_reg: u8) {
+        debug!("Skipping next instruction if key in Register {} is pressed", x_reg);
         if self.keypad.get_keys()[self.variable_registers[x_reg as usize] as usize] {
             self.pc += 2;
         }
@@ -421,6 +422,7 @@ impl Emulator {
     /// Skip one instruction (increment PC by 2) if the key corresponding to the value in
     /// register `x_reg` is not pressed
     fn skip_if_key_not_pressed(&mut self, x_reg: u8) {
+        debug!("Skipping next instruction if key in Register {} is not pressed", x_reg);
         if !self.keypad.get_keys()[self.variable_registers[x_reg as usize] as usize] {
             self.pc += 2;
         }
