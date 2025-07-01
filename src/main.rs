@@ -1,8 +1,11 @@
 mod emulator;
 mod keypad;
 mod opcode;
+mod sound;
 
 use crate::emulator::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::sound::SoundSystem;
+
 use clap::Parser;
 use emulator::Emulator;
 use log::{debug, info};
@@ -86,6 +89,8 @@ fn main() -> Result<(), String> {
     canvas.fill_rect(screen_area)?;
     canvas.present();
 
+    let sound_system = SoundSystem::new(context);
+
     while running {
         for event in event_pump.poll_iter() {
             match event {
@@ -106,12 +111,13 @@ fn main() -> Result<(), String> {
             }
         }
         emu.execute();
+        sound_system.handle_sound_timer(emu.sound_timer());
         if emu.needs_redraw() {
             texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 for y in 0..SCREEN_HEIGHT {
                     for x in 0..SCREEN_WIDTH {
                         let offset = y * pitch + x;
-                        buffer[offset] = if emu.screen[y][x] {
+                        buffer[offset] = if emu.screen()[y][x] {
                             0xFF // white
                         } else {
                             0x00 // black

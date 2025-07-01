@@ -1,8 +1,11 @@
 use log::{debug, error, warn};
 use std::fs;
 
+use std::time::{Duration, Instant};
+
 use crate::keypad::Keypad;
 use crate::opcode::Opcode;
+
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 // CHIP8 screen size is 64*32 pixels
@@ -36,7 +39,7 @@ const FONT_SET: [u8; FONT_SET_SIZE] = [
 
 pub struct Emulator {
     ram: [u8; RAM_SIZE],
-    pub screen: [[bool; SCREEN_WIDTH]; SCREEN_HEIGHT], // bool because pixels can be either black or white
+    screen: [[bool; SCREEN_WIDTH]; SCREEN_HEIGHT], // bool because pixels can be either black or white
     pc: u16, // program counter, points to current instruction in memory, memory addresses are 16 bits
     i: u16,  // index register, used to point to locations in memory
     stack: Vec<u16>, // stack for addresses
@@ -48,6 +51,7 @@ pub struct Emulator {
     redraw_required: bool, // flag indicating a change to the screen was made
     use_y_on_shift: bool,
     use_x_on_jump: bool,
+    last_timer_update: Instant,
 }
 
 const START_ADDR: u16 = 0x200;
@@ -69,6 +73,7 @@ impl Emulator {
             redraw_required: false,
             use_y_on_shift,
             use_x_on_jump,
+            last_timer_update: Instant::now(),
         };
 
         emulator.ram[..FONT_SET_SIZE].copy_from_slice(&FONT_SET);
@@ -93,12 +98,35 @@ impl Emulator {
         false
     }
 
+    /// Handles updating of sound, and delay timer 60 times per second
+    fn handle_timers(&mut self) {
+        let now = Instant::now();
+        let timer_update_delta = Duration::from_secs_f64(1.0 / 60.0);
+        if now.duration_since(self.last_timer_update) >= timer_update_delta {
+            self.delay_timer = self.delay_timer.saturating_sub(1);
+            self.sound_timer = self.sound_timer.saturating_sub(1);
+            self.last_timer_update = now;
+        }
+    }
+
+    /// Returns the current state of the sound timer
+    pub fn sound_timer(&self) -> &u8 {
+        &self.sound_timer
+    }
+
+    /// Returns the current state of the screen
+    pub fn screen(&self) -> &[[bool; SCREEN_WIDTH]; SCREEN_HEIGHT] {
+        &self.screen
+    }
+
     /// Execute the instruction and do what it tells you
     pub fn execute(&mut self) {
         let decoded_operation: Opcode = self.decode();
         debug!("Opcode decoded as {:?}", decoded_operation);
         debug!("Current state of RAM {:?}", self.ram);
         debug!("Current state of Registers {:?}", self.variable_registers);
+
+        self.handle_timers();
 
         match decoded_operation.category {
             0x0 => match decoded_operation.nnn {
@@ -147,6 +175,12 @@ impl Emulator {
             0xE => match decoded_operation.nn {
                 0x9E => self.skip_if_key_pressed(decoded_operation.x),
                 0xA1 => self.skip_if_key_not_pressed(decoded_operation.x),
+                _ => warn_unknown_operation(decoded_operation),
+            },
+            0xF => match decoded_operation.nn {
+                0x07 => self.set_register_to_delay_timer(decoded_operation.x),
+                0x15 => self.set_delay_timer_to_register_value(decoded_operation.x),
+                0x18 => self.set_sound_timer_to_register_value(decoded_operation.x),
                 _ => warn_unknown_operation(decoded_operation),
             },
             _ => warn_unknown_operation(decoded_operation),
@@ -412,20 +446,47 @@ impl Emulator {
 
     /// Skip one instruction (increment PC by 2) if the key corresponding to the value in
     /// register `x_reg` is pressed
-    fn skip_if_key_pressed(&mut self, x_reg: u8) {
-        debug!("Skipping next instruction if key in Register {} is pressed", x_reg);
-        if self.keypad.get_keys()[self.variable_registers[x_reg as usize] as usize] {
+    fn skip_if_key_pressed(&mut self, reg: u8) {
+        debug!(
+            "Skipping next instruction if key in Register {} is pressed",
+            reg
+        );
+        if self.keypad.get_keys()[self.variable_registers[reg as usize] as usize] {
             self.pc += 2;
         }
     }
 
     /// Skip one instruction (increment PC by 2) if the key corresponding to the value in
     /// register `x_reg` is not pressed
-    fn skip_if_key_not_pressed(&mut self, x_reg: u8) {
-        debug!("Skipping next instruction if key in Register {} is not pressed", x_reg);
-        if !self.keypad.get_keys()[self.variable_registers[x_reg as usize] as usize] {
+    fn skip_if_key_not_pressed(&mut self, reg: u8) {
+        debug!(
+            "Skipping next instruction if key in Register {} is not pressed",
+            reg
+        );
+        if !self.keypad.get_keys()[self.variable_registers[reg as usize] as usize] {
             self.pc += 2;
         }
+    }
+
+    /// Sets value of register `reg` to delay timer value
+    fn set_register_to_delay_timer(&mut self, reg: u8) {
+        debug!(
+            "Setting register {} to delay timer value {}",
+            reg, self.delay_timer
+        );
+        self.variable_registers[reg as usize] = self.delay_timer;
+    }
+
+    /// Sets value delay timer to value in register `reg`
+    fn set_delay_timer_to_register_value(&mut self, reg: u8) {
+        debug!("Setting delay timer to value in register {}", reg);
+        self.delay_timer = self.variable_registers[reg as usize];
+    }
+
+    /// Sets value sound timer to value in register `reg`
+    fn set_sound_timer_to_register_value(&mut self, reg: u8) {
+        debug!("Setting sound timer to value in register {}", reg);
+        self.sound_timer = self.variable_registers[reg as usize];
     }
 }
 
