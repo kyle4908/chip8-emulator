@@ -51,6 +51,7 @@ pub struct Emulator {
     redraw_required: bool, // flag indicating a change to the screen was made
     use_y_on_shift: bool,
     use_x_on_jump: bool,
+    modify_i_on_load_and_store: bool,
     last_timer_update: Instant,
 }
 
@@ -58,7 +59,11 @@ const START_ADDR: u16 = 0x200;
 // CHIP8 programs are supposed to be loaded into memory after address 200
 
 impl Emulator {
-    pub fn new(use_y_on_shift: bool, use_x_on_jump: bool) -> Self {
+    pub fn new(
+        use_y_on_shift: bool,
+        use_x_on_jump: bool,
+        modify_i_on_load_and_store: bool,
+    ) -> Self {
         let mut emulator: Self = Self {
             ram: [0; RAM_SIZE],
             screen: [[false; SCREEN_WIDTH]; SCREEN_HEIGHT],
@@ -73,6 +78,7 @@ impl Emulator {
             redraw_required: false,
             use_y_on_shift,
             use_x_on_jump,
+            modify_i_on_load_and_store,
             last_timer_update: Instant::now(),
         };
 
@@ -185,6 +191,8 @@ impl Emulator {
                 0x1E => self.add_register_to_index_register(decoded_operation.x),
                 0x29 => self.set_index_register_to_font_location(decoded_operation.x),
                 0x33 => self.store_register_digits_in_memory(decoded_operation.x),
+                0x55 => self.store_to_memory_from_register(decoded_operation.x),
+                0x65 => self.load_from_memory_to_register(decoded_operation.x),
                 _ => warn_unknown_operation(decoded_operation),
             },
             _ => warn_unknown_operation(decoded_operation),
@@ -543,6 +551,46 @@ impl Emulator {
         self.ram[index] = value / 100;
         self.ram[index + 1] = (value % 100) / 10;
         self.ram[index + 2] = value % 10;
+    }
+
+    /// Store the value of each register from 0-`reg` in successive memory addresses
+    /// starting from the index register.
+    /// If `modify_i_on_load_and_store` is true, the the index register gets modified
+    /// to `i + reg + 1`
+    fn store_to_memory_from_register(&mut self, reg: u8) {
+        debug!(
+            "Storing to addresses {:#X} to {:#X}. From registers {} to {}",
+            self.i,
+            self.i + reg as u16,
+            0,
+            reg
+        );
+        for i in 0..=reg {
+            self.ram[self.i as usize + i as usize] = self.variable_registers[i as usize];
+        }
+        if self.modify_i_on_load_and_store {
+            self.i = self.i + reg as u16 + 1;
+        }
+    }
+
+    /// Load the value of the memory addresses from `i` to `i + reg` and store them in
+    /// registers `0` to `reg`
+    /// If `modify_i_on_load_and_store` is true, the the index register gets modified
+    /// to `i + reg + 1`
+    fn load_from_memory_to_register(&mut self, reg: u8) {
+        debug!(
+            "Loading from addresses {:#X} to {:#X}. To registers {} to {}",
+            self.i,
+            self.i + reg as u16,
+            0,
+            reg
+        );
+        for i in 0..=reg {
+            self.variable_registers[i as usize] = self.ram[self.i as usize + i as usize];
+        }
+        if self.modify_i_on_load_and_store {
+            self.i = self.i + reg as u16 + 1;
+        }
     }
 }
 

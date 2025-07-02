@@ -34,6 +34,11 @@ struct Args {
     /// If you need the behaviour with the X register, use this flag.
     #[arg(short, long)]
     jump_with_x: bool,
+
+    /// On older systems, load and store operations used to modify the index register, the more recent
+    /// and common behaviour is to not do this, so we don't do it by default
+    #[arg(short, long)]
+    modify_i_in_load_and_store: bool,
 }
 
 fn main() -> Result<(), String> {
@@ -82,7 +87,11 @@ fn main() -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
 
-    let mut emu = Emulator::new(args.shift_with_y, args.jump_with_x);
+    let mut emu = Emulator::new(
+        args.shift_with_y,
+        args.jump_with_x,
+        args.modify_i_in_load_and_store,
+    );
     emu.load_file(&args.filename);
 
     canvas.set_draw_color(Color::BLACK);
