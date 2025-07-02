@@ -183,6 +183,8 @@ impl Emulator {
                 0x15 => self.set_delay_timer_to_register_value(decoded_operation.x),
                 0x18 => self.set_sound_timer_to_register_value(decoded_operation.x),
                 0x1E => self.add_register_to_index_register(decoded_operation.x),
+                0x29 => self.set_index_register_to_font_location(decoded_operation.x),
+                0x33 => self.store_register_digits_in_memory(decoded_operation.x),
                 _ => warn_unknown_operation(decoded_operation),
             },
             _ => warn_unknown_operation(decoded_operation),
@@ -516,6 +518,31 @@ impl Emulator {
             }
         }
         self.pc -= 2; // Since PC was incremented on fetch, decrementing to simulate blocking
+    }
+
+    /// Sets to index register to the location of the font of the hexidecimal
+    /// number stored in register `reg`
+    fn set_index_register_to_font_location(&mut self, reg: u8) {
+        debug!(
+            "Setting index register to font of number stored in register {}",
+            reg
+        );
+        self.i = self.variable_registers[reg as usize] as u16 * 5;
+    }
+
+    /// Takes the number in register `reg` as a decimal number,
+    /// takes each of it's digits and stores them in memory
+    /// at the memory address of the index register
+    fn store_register_digits_in_memory(&mut self, reg: u8) {
+        debug!(
+            "Storing digits from value in register {} in memory at address {:#X}",
+            reg, self.i
+        );
+        let index: usize = self.i as usize;
+        let value = self.variable_registers[reg as usize];
+        self.ram[index] = value / 100;
+        self.ram[index + 1] = (value % 100) / 10;
+        self.ram[index + 2] = value % 10;
     }
 }
 
